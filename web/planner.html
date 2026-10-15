@@ -95,6 +95,13 @@ ol.tl{list-style:none;margin:0;padding:0}
 .tl .det{color:var(--muted);font-size:.88rem;margin-top:2px}
 .chip{font-size:.68rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:99px;background:var(--accent-soft);color:var(--accent)}
 .chip.cold{background:var(--cold-soft);color:var(--cold)}
+.chip.starter{background:var(--accent-soft);color:var(--fg);border:1px solid var(--line)}
+.sbox h3{font-size:.95rem;margin:14px 0 4px;font-weight:600}
+.sbox h3:first-child{margin-top:0}
+.sbox p{margin:0 0 6px;font-size:.86rem}
+.sbox ul{margin:0;padding-left:18px;font-size:.86rem;display:flex;flex-direction:column;gap:3px}
+.sbox .feeds td{font-size:.86rem}
+.sbox .lead{font-size:.9rem}
 .chip.night{background:var(--warn-soft);color:var(--warn)}
 .tl li.gap .body{padding:4px 0 6px}
 .tl li.gap .det{font-family:var(--f-mono);font-size:.78rem}
@@ -158,6 +165,17 @@ tr.tot td{font-weight:600;border-bottom:0}
             <div class="unit"><input type="number" id="retard" min="4" max="48" step="1" value="12" inputmode="numeric"><span>h</span></div>
           </div>
           <div class="field full">
+            <label for="starter">Your starter</label>
+            <select id="starter">
+              <option value="active">Active: fed within the last day</option>
+              <option value="w1">In the fridge under 1 week</option>
+              <option value="w4">In the fridge 1–4 weeks</option>
+              <option value="m3" selected>In the fridge 1–3 months</option>
+              <option value="m6">In the fridge 3–6 months</option>
+              <option value="m12">In the fridge 6+ months</option>
+            </select>
+          </div>
+          <div class="field full">
             <label class="check" for="warm"><input type="checkbox" id="warm"> Use a warm proofing spot (oven with light on)</label>
           </div>
           <div class="full warmbox" id="warm-wrap" hidden>
@@ -216,6 +234,11 @@ tr.tot td{font-weight:600;border-bottom:0}
           <div class="hydro" id="hydro" aria-live="polite"></div>
           <p class="hint">Prefermented flour is the share of total flour that goes into the levain. More levain ferments faster; the bulk time scales with it.</p>
         </details>
+      </section>
+
+      <section class="panel" aria-labelledby="h-starter" id="starter-panel">
+        <h2 id="h-starter">Starter</h2>
+        <div id="starterbox"></div>
       </section>
 
       <section class="panel" aria-labelledby="h-recipe" id="recipe-panel">
@@ -291,7 +314,11 @@ function compute(){
   const autolyse = 45*MIN, bench = 30*MIN, shapeT = 15*MIN;
   const proofT = proof === "cold" ? retard*HR : roomProofT;
   const lidOn = 20*MIN, lidOff = 25*MIN, cool = 60*MIN;
-  const total = levainT + bulkT + bench + shapeT + proofT + lidOn + lidOff + cool;
+  // Starter revival: feeds before the levain build, longer and gentler the longer it slept
+  const cond = $("starter").value;
+  const rev = (STARTER[cond] || STARTER.active).feeds.map(([a, hrs]) => ({a, dur: hrs*HR*fT(tLev)}));
+  const revT = rev.reduce((sum, f) => sum + f.dur, 0);
+  const total = revT + levainT + bulkT + bench + shapeT + proofT + lidOn + lidOff + cool;
 
   const anchor = new Date($("when").value);
   const valid = !isNaN(anchor);
@@ -310,9 +337,33 @@ function compute(){
 
   // Events
   const ev = [];
-  let t = t0;
   const add = (at, o) => ev.push(Object.assign({at: round5(at)}, o));
-  add(t, {title:"Feed levain", det:`Mix ${g(seed)} g ripe starter + ${g(buildFlour)} g ${fl.short} + ${g(buildWater)} g water (≈78 °F). Cover and leave ${spot(tLev)} (${tLev} °F) about ${fmtDur(levainT)} until doubled and domed.`, hands:true});
+
+  // Revival feeds. Intermediate feeds use 20 g; the last is sized to cover the levain seed + 10 g to keep
+  const KEEP = 10;
+  const feeds = rev.map((f, i) => {
+    const last = i === rev.length - 1;
+    const sAmt = last ? Math.max(10, Math.ceil((seed + KEEP + 8) / (1 + 2*f.a))) : 20;
+    return Object.assign({}, f, {s: sAmt, fl: sAmt*f.a, last});
+  });
+  let t = t0;
+  feeds.forEach((f, i) => {
+    const n = feeds.length;
+    const ratio = `1:${f.a}:${f.a}`;
+    const feedTxt = `keep ${g(f.s)} g, discard the rest, and mix in ${g(f.fl)} g ${fl.short} + ${g(f.fl)} g water (${ratio})`;
+    let det;
+    if (i === 0) det = `Take the jar out of the fridge. Pour off any grey liquid on top, stir, then ${feedTxt}. Use water around 80 °F to wake it up.`;
+    else det = `It should have risen and look bubbly. If it hasn't moved, give it a few more hours before feeding. Then ${feedTxt}.`;
+    if (f.last) det += ` This feed makes the starter for your levain; it should double in about ${fmtDur(f.dur)}.`;
+    else det += ` Leave ${spot(tLev)} about ${fmtDur(f.dur)}.`;
+    f.at = round5(t);
+    add(t, {title: i === 0 ? `Starter out of fridge · feed 1 of ${n}` : `Feed starter ${i+1} of ${n}`, det, hands:true, starter:true});
+    t += f.dur;
+  });
+
+  add(t, {title:"Feed levain", det:`Mix ${g(seed)} g ripe starter + ${g(buildFlour)} g ${fl.short} + ${g(buildWater)} g water (≈78 °F). Cover and leave ${spot(tLev)} (${tLev} °F) about ${fmtDur(levainT)} until doubled and domed. Save ${KEEP} g of the leftover starter for the jar.`, hands:true});
+  add(t + 5*MIN, {title:"Feed the keeper starter", det:`Mix ${KEEP} g leftover starter with ${KEEP*5} g ${fl.short} + ${KEEP*5} g water (1:5:5) in a clean jar. Leave out 1–2 h, then refrigerate.`, hands:true, starter:true});
+  add(t + 2*HR, {title:"Starter back in the fridge", det:"Lid on loosely. It will keep for weeks; see the Starter panel for longer storage.", cold:true, starter:true});
   const mixAt = t + levainT;
   add(Math.max(t, mixAt - autolyse), {title:"Autolyse", det:`Mix ${g(breadFlour)} g ${fl.short}${wwFlour?` + ${g(wwFlour)} g ${wg.short}`:""} with ${g(finalWater - reserve)} g water until no dry flour remains. Rest covered.`, hands:true});
   add(mixAt, {title:"Mix dough · start bulk", det:`Add ${g(levain)} g levain, pinch and fold in. Rest 15 min, then add ${g(S)} g salt with the reserved ${g(reserve)} g water and squeeze in until absorbed. Bulk ${spot(tBulk)} (${tBulk} °F).`, hands:true});
@@ -333,7 +384,7 @@ function compute(){
   add(bakeAt + lidOn + lidOff + cool, {title:"Bread ready", det:"Cool enough to slice. Two hours is better if you can wait.", done:true});
 
   ev.sort((a,b)=>a.at-b.at);
-  return {ev, valid, total, loaves, loafwt, dough, F, W, S, h, s, pf, ww, seed, buildFlour, buildWater, levain, levFlour, levWater, breadFlour, wwFlour, finalWater, T, tBulk, bulkT, proof, proofT, fl, wg};
+  return {ev, valid, total, loaves, loafwt, dough, F, W, S, h, s, pf, ww, seed, buildFlour, buildWater, levain, levFlour, levWater, breadFlour, wwFlour, finalWater, T, tBulk, bulkT, proof, proofT, fl, wg, feeds, revT, cond, tLev, KEEP};
 }
 
 const isNight = d => { const hr=d.getHours(); return hr>=23 || hr<6; };
@@ -356,6 +407,7 @@ function render(){
     const li = document.createElement("li");
     li.className = e.cold ? "cold" : (e.hands ? "hands" : "");
     const chips = [];
+    if (e.starter) chips.push('<span class="chip starter">Starter</span>');
     if (e.cold) chips.push('<span class="chip cold">Fridge</span>');
     if (e.hands && isNight(d)) chips.push('<span class="chip night">Overnight</span>');
     if (e.warn) chips.push('<span class="chip night">Clear the oven</span>');
@@ -370,6 +422,7 @@ function render(){
     <div><span class="label">Start</span><b>${fmtDay(first)} ${fmtTime(first)}</b></div>
     <div><span class="label">Ready</span><b>${fmtDay(last)} ${fmtTime(last)}</b></div>
     <div><span class="label">Total</span><b>${fmtDur(last-first)}</b></div>
+    ${r.revT ? `<div><span class="label">Starter revival</span><b>${fmtDur(r.revT)}</b></div>` : ""}
     <div><span class="label">Bulk at ${r.tBulk} °F</span><b>${fmtDur(r.bulkT)}</b></div>`;
 
   const pct = x => (x*100).toFixed(x*100%1?1:0)+"%";
@@ -399,6 +452,7 @@ function render(){
     </tbody></table></div>`;
 
   renderHydro(r);
+  renderStarter(r);
   $("retard-wrap").hidden = r.proof !== "cold";
   $("warm-wrap").hidden = !$("warm").checked;
   window.__plan = r;
@@ -425,6 +479,47 @@ const WG = {
   rye:{name:"Whole rye flour", short:"whole rye", absorb:0.25, speed:0.5,
     note:"Rye builds almost no gluten and holds a lot of water as sticky gums. It ferments fast and tastes more sour. Above ~30% rye the dough becomes paste-like and won't shape like a wheat loaf."}
 };
+
+// Revival plans: [ratio a (starter:flour:water = 1:a:a), hours to peak at 76 °F]
+const STARTER = {
+  active:{label:"active", feeds:[], lead:"Your starter is active. Use it for the levain when it's at or near its peak, roughly 4–8 hours after a feed."},
+  w1:{label:"under 1 week", feeds:[[2,6]], lead:"One feed wakes it up. Use it for the levain at its peak."},
+  w4:{label:"1–4 weeks", feeds:[[1,10],[2,7]], lead:"Two feeds: the first is gentle (1:1:1) because the culture is sluggish and acidic; the second builds strength."},
+  m3:{label:"1–3 months", feeds:[[1,12],[2,8],[2,6]], lead:"Three feeds over about a day. Expect the first to be slow; by the third it should double reliably."},
+  m6:{label:"3–6 months", feeds:[[1,12],[1,12],[2,8],[2,6]], lead:"Four feeds over about a day and a half. The first one or two may barely rise; that's normal."},
+  m12:{label:"6+ months", feeds:[[1,12],[1,12],[1,12],[2,8],[2,6]], lead:"Five feeds over about two days. Long-stored starters often smell like nail polish remover at first and need patience."}
+};
+function renderStarter(r){
+  const st = STARTER[r.cond] || STARTER.active;
+  const rows = r.feeds.map((f, i) => {
+    const d = new Date(f.at);
+    return `<tr><td>${i+1}</td><td class="n">${fmtDay(d)} ${fmtTime(d)}</td><td class="n">1:${f.a}:${f.a}</td><td class="n">${g(f.s)} / ${g(f.fl)} / ${g(f.fl)} g</td></tr>`;
+  }).join("");
+  $("starterbox").innerHTML = `<div class="sbox">
+    <p class="lead">${st.lead}</p>
+    ${r.feeds.length ? `<div style="overflow-x:auto"><table class="feeds"><thead><tr><th>Feed</th><th class="n">When</th><th class="n">Ratio</th><th class="n">Starter / flour / water</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="hint">Feeds are timed for ${r.tLev} °F and already in the schedule. Discard (or save for pancakes) what you don't keep. A feed can slide an hour or two either way if a time is inconvenient; just watch that it has risen before the next one. The last feed is sized to cover the levain plus ${r.KEEP} g to keep.</p>` : ""}
+    <h3>Ready to use when it</h3>
+    <ul>
+      <li>doubles within 4–8 hours of a feed</li>
+      <li>has a domed top with bubbles throughout and on the sides of the jar</li>
+      <li>smells pleasantly sour and yeasty, like yogurt or beer</li>
+    </ul>
+    <h3>If something looks off</h3>
+    <ul>
+      <li><b>Grey liquid on top (hooch):</b> harmless. Pour it off for a milder starter.</li>
+      <li><b>Nail polish / acetone smell:</b> it's hungry. Keep feeding 1:2:2 every 12 hours until it smells sweet-sour.</li>
+      <li><b>Barely rising after 3 feeds:</b> move it somewhere warmer (78–80 °F) and use some whole wheat or rye in the feeds.</li>
+      <li><b>Pink, orange or fuzzy mold:</b> throw it out. A thin white film is usually kahm yeast; scrape it off and feed.</li>
+    </ul>
+    <h3>Storing it for months</h3>
+    <ul>
+      <li>Feed 1:5:5 (or stiffer) right before it goes in the fridge. More food means it lasts longer.</li>
+      <li>A loose lid lets gas out; a small jar limits the surface that dries out.</li>
+      <li>For a backup, spread some thin on parchment, dry it, and keep the flakes in a sealed bag. They keep for a year or more.</li>
+    </ul>
+  </div>`;
+}
 
 const HYDRO = [
   {max:65, name:"Stiff dough", sum:"Firm and dry to the touch. Easy to knead and shape, but the crumb comes out tight and even, closer to a sandwich loaf.",
@@ -509,13 +604,13 @@ function setMode(m){
   mode = m;
   $("mode-start").setAttribute("aria-pressed", m==="start");
   $("mode-finish").setAttribute("aria-pressed", m==="finish");
-  $("when-label").textContent = m==="start" ? "Start (feed the levain) at" : "Bread ready (cooled) by";
+  $("when-label").textContent = m==="start" ? "Start (first step) at" : "Bread ready (cooled) by";
   render();
 }
 $("mode-start").addEventListener("click", ()=>setMode("start"));
 $("mode-finish").addEventListener("click", ()=>setMode("finish"));
 
-const ids = ["when","loaves","loafwt","temp","proof","retard","hyd","salt","pf","ww","flour","wgType","warm","warmT","wLev","wBulk","wProof"];
+const ids = ["when","starter","loaves","loafwt","temp","proof","retard","hyd","salt","pf","ww","flour","wgType","warm","warmT","wLev","wBulk","wProof"];
 ids.forEach(id => { $(id).addEventListener("input", render); $(id).addEventListener("change", render); });
 const isBox = id => $(id).type === "checkbox";
 

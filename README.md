@@ -14,7 +14,8 @@ Requires Android 9 (API 28) or newer. Built against API 35.
 
 1. Create a new GitHub repository and push this folder to it.
 2. The **Build APK** workflow runs on every push (or start it by hand from the Actions tab).
-3. Open the finished run and download the `sourdough-planner-apk` artifact. Unzip it to get `app-release.apk`.
+3. Each successful build publishes a release. On your phone, download the latest APK directly:
+   https://github.com/gyurko/Sourdough-planner/releases/latest/download/SourdoughPlanner.apk
 
 ## Build option B: Android Studio
 

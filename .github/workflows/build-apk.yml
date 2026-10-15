@@ -2,7 +2,11 @@ name: Build APK
 
 on:
   push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: write   # needed to publish the release
 
 jobs:
   build:
@@ -21,8 +25,23 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk SourdoughPlanner.apk
 
+      # Keep the zipped artifact for anyone using the Actions page
       - uses: actions/upload-artifact@v4
         with:
           name: sourdough-planner-apk
-          path: app/build/outputs/apk/release/*.apk
+          path: SourdoughPlanner.apk
+
+      # Publish a release so the APK has a permanent, sign-in-free link:
+      # https://github.com/<owner>/<repo>/releases/latest/download/SourdoughPlanner.apk
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Sourdough Planner build ${{ github.run_number }}
+          body: |
+            Built from ${{ github.sha }}.
+            Install: download SourdoughPlanner.apk on your phone and open it.
+          files: SourdoughPlanner.apk
+          make_latest: true

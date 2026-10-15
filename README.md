@@ -31,7 +31,7 @@ Command line equivalent (needs the Android SDK and `ANDROID_HOME` set):
 ## Installing the APK
 
 Copy the APK to the phone and open it. Android asks you to allow installs from that source (Files, Chrome, Drive) once.
-The release build is signed with the debug key so it installs directly; set up your own signing config before distributing it.
+Builds are signed with `app/sideload.keystore` (committed on purpose), so every build has the same signature and new versions install over the old one. Use a private key before distributing the app publicly.
 
 On first use of **Set step reminders**, Android 13+ asks for notification permission. Allow it, or the reminders are scheduled but nothing appears.
 

@@ -14,12 +14,25 @@ android {
         versionName = "1.1"
     }
 
+    // Fixed key committed to the repo so every build (local or GitHub Actions) has the same
+    // signature and updates install over the previous version. Fine for sideloading;
+    // use a private key before distributing the app anywhere public.
+    signingConfigs {
+        create("sideload") {
+            storeFile = file("sideload.keystore")
+            storePassword = "sourdough"
+            keyAlias = "sourdough"
+            keyPassword = "sourdough"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("sideload")
+        }
         release {
             isMinifyEnabled = false
-            // Signed with the debug key so the APK can be sideloaded directly.
-            // Replace with your own signing config before publishing anywhere.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("sideload")
         }
     }
 

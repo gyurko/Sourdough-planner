@@ -194,6 +194,21 @@ tr.tot td{font-weight:600;border-bottom:0}
               <option value="m12">In the fridge 6+ months</option>
             </select>
           </div>
+          <div class="field">
+            <label for="starterT">Starter sits at</label>
+            <div class="unit"><input type="number" id="starterT" min="60" max="90" step="1" value="72" inputmode="numeric"><span>°F</span></div>
+          </div>
+          <div class="field">
+            <label for="sflour">Feed it with</label>
+            <select id="sflour">
+              <option value="main">Same as main flour</option>
+              <option value="bread">Bread flour</option>
+              <option value="ap">All-purpose</option>
+              <option value="mix" selected>Bread + 20% whole wheat</option>
+              <option value="ww">Whole wheat</option>
+              <option value="rye">Whole rye</option>
+            </select>
+          </div>
           <div class="field full">
             <label class="check" for="warm"><input type="checkbox" id="warm"> Use a warm proofing spot (oven with light on)</label>
           </div>
@@ -335,7 +350,11 @@ function compute(){
   const lidOn = 20*MIN, lidOff = 25*MIN, cool = 60*MIN;
   // Starter revival: feeds before the levain build, longer and gentler the longer it slept
   const cond = $("starter").value;
-  const rev = (STARTER[cond] || STARTER.active).feeds.map(([a, hrs]) => ({a, dur: hrs*HR*fT(tLev)}));
+  const sT = num("starterT",55,90,T);
+  const sfKey = $("sflour").value;
+  const sf = sfKey === "main" ? {name: fl.short, speed: 1, split: null} : (SFLOUR[sfKey] || SFLOUR.bread);
+  const sfDesc = amt => sf.split ? `${g(amt*sf.split[0][1])} g ${sf.split[0][0]} + ${g(amt*sf.split[1][1])} g ${sf.split[1][0]}` : `${g(amt)} g ${sf.name}`;
+  const rev = (STARTER[cond] || STARTER.active).feeds.map(([a, hrs]) => ({a, dur: hrs*HR*fT(sT)*sf.speed}));
   const revT = rev.reduce((sum, f) => sum + f.dur, 0);
   const total = revT + levainT + bulkT + bench + shapeT + proofT + lidOn + lidOff + cool;
 
@@ -369,19 +388,19 @@ function compute(){
   feeds.forEach((f, i) => {
     const n = feeds.length;
     const ratio = `1:${f.a}:${f.a}`;
-    const feedTxt = `keep ${g(f.s)} g, discard the rest, and mix in ${g(f.fl)} g ${fl.short} + ${g(f.fl)} g water (${ratio})`;
+    const feedTxt = `keep ${g(f.s)} g, discard the rest, and mix in ${sfDesc(f.fl)} + ${g(f.fl)} g water (${ratio})`;
     let det;
     if (i === 0) det = `Take the jar out of the fridge. Pour off any grey liquid on top, stir, then ${feedTxt}. Use water around 80 °F to wake it up.`;
     else det = `It should have risen and look bubbly. If it hasn't moved, give it a few more hours before feeding. Then ${feedTxt}.`;
     if (f.last) det += ` This feed makes the starter for your levain; it should double in about ${fmtDur(f.dur)}.`;
-    else det += ` Leave ${spot(tLev)} about ${fmtDur(f.dur)}.`;
+    else det += ` Leave at ${sT} °F about ${fmtDur(f.dur)}.`;
     f.at = round5(t);
     add(t, {title: i === 0 ? `Starter out of fridge · feed 1 of ${n}` : `Feed starter ${i+1} of ${n}`, det, hands:true, starter:true});
     t += f.dur;
   });
 
   add(t, {title:"Feed levain", det:`Mix ${g(seed)} g ripe starter + ${g(buildFlour)} g ${fl.short} + ${g(buildWater)} g water (≈78 °F). Cover and leave ${spot(tLev)} (${tLev} °F) about ${fmtDur(levainT)} until doubled and domed. Save ${KEEP} g of the leftover starter for the jar.`, hands:true});
-  add(t + 5*MIN, {title:"Feed the keeper starter", det:`Mix ${KEEP} g leftover starter with ${KEEP*5} g ${fl.short} + ${KEEP*5} g water (1:5:5) in a clean jar. Leave out 1–2 h, then refrigerate.`, hands:true, starter:true});
+  add(t + 5*MIN, {title:"Feed the keeper starter", det:`Mix ${KEEP} g leftover starter with ${KEEP*5} g ${sfKey === "ap" ? "all-purpose flour" : sfKey === "main" ? fl.short : "bread flour"} + ${KEEP*5} g water (1:5:5) in a clean jar. White flour keeps it mild and slow in the fridge. Leave out 1–2 h, then refrigerate.`, hands:true, starter:true});
   add(t + 2*HR, {title:"Starter back in the fridge", det:"Lid on loosely. It will keep for weeks; see the Starter panel for longer storage.", cold:true, starter:true});
   const mixAt = t + levainT;
   add(Math.max(t, mixAt - autolyse), {title:"Autolyse", det:`Mix ${g(breadFlour)} g ${fl.short}${wwFlour?` + ${g(wwFlour)} g ${wg.short}`:""} with ${g(finalWater - reserve)} g water until no dry flour remains. Rest covered.`, hands:true});
@@ -403,7 +422,7 @@ function compute(){
   add(bakeAt + lidOn + lidOff + cool, {title:"Bread ready", det:"Cool enough to slice. Two hours is better if you can wait.", done:true});
 
   ev.sort((a,b)=>a.at-b.at);
-  return {ev, valid, total, loaves, loafwt, dough, F, W, S, h, s, pf, ww, seed, buildFlour, buildWater, levain, levFlour, levWater, breadFlour, wwFlour, finalWater, T, tBulk, bulkT, proof, proofT, fl, wg, feeds, revT, cond, tLev, KEEP};
+  return {ev, valid, total, loaves, loafwt, dough, F, W, S, h, s, pf, ww, seed, buildFlour, buildWater, levain, levFlour, levWater, breadFlour, wwFlour, finalWater, T, tBulk, bulkT, proof, proofT, fl, wg, feeds, revT, cond, tLev, KEEP, sT, sf, sfKey};
 }
 
 const isNight = d => { const hr=d.getHours(); return hr>=23 || hr<6; };
@@ -499,6 +518,22 @@ const WG = {
     note:"Rye builds almost no gluten and holds a lot of water as sticky gums. It ferments fast and tastes more sour. Above ~30% rye the dough becomes paste-like and won't shape like a wheat loaf."}
 };
 
+// Feed flours for the starter. speed < 1 = ferments faster than white flour
+const SFLOUR = {
+  bread:{name:"bread flour", speed:1, split:null},
+  ap:{name:"all-purpose flour", speed:1, split:null},
+  mix:{name:"bread flour + 20% whole wheat", speed:0.9, split:[["bread flour",0.8],["whole wheat",0.2]]},
+  ww:{name:"whole wheat flour", speed:0.8, split:null},
+  rye:{name:"whole rye flour", speed:0.7, split:null}
+};
+const SFLOUR_NOTE = {
+  main:"Your starter is fed with the same flour as the dough.",
+  bread:"Bread flour gives a steady, mild starter and is a good everyday choice.",
+  ap:"Unbleached all-purpose works fine; it's slightly less vigorous than bread flour and a bit runnier at the same ratio.",
+  mix:"Bread flour with 20% whole wheat is a good all-round feed: the white flour keeps it mild and the whole wheat speeds it up.",
+  ww:"Whole wheat ferments faster and makes the starter more sour and active. Good for revival; expect it to peak sooner.",
+  rye:"Rye is the fastest and most forgiving feed for a sluggish starter. It turns paste-like and sour; switch back to white flour once it's lively if you want a milder loaf."
+};
 // Revival plans: [ratio a (starter:flour:water = 1:a:a), hours to peak at 76 °F]
 const STARTER = {
   active:{label:"active", feeds:[], lead:"Your starter is active. Use it for the levain when it's at or near its peak, roughly 4–8 hours after a feed."},
@@ -517,7 +552,16 @@ function renderStarter(r){
   $("starterbox").innerHTML = `<div class="sbox">
     <p class="lead">${st.lead}</p>
     ${r.feeds.length ? `<div style="overflow-x:auto"><table class="feeds"><thead><tr><th>Feed</th><th class="n">When</th><th class="n">Ratio</th><th class="n">Starter / flour / water</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="hint">Feeds are timed for ${r.tLev} °F and already in the schedule. Discard (or save for pancakes) what you don't keep. A feed can slide an hour or two either way if a time is inconvenient; just watch that it has risen before the next one. The last feed is sized to cover the levain plus ${r.KEEP} g to keep.</p>` : ""}
+    <p class="hint">Feeds are timed for ${r.sT} °F with ${r.sf.name} and are already in the schedule. Discard (or save for pancakes) what you don't keep. A feed can slide an hour or two either way if a time is inconvenient; just watch that it has risen before the next one. The last feed is sized to cover the levain plus ${r.KEEP} g to keep.</p>` : ""}
+    <h3>Flour for feeding</h3>
+    <p>${SFLOUR_NOTE[r.sfKey] || SFLOUR_NOTE.main}</p>
+    <ul>
+      <li><b>Everyday feeding:</b> unbleached bread or all-purpose flour. Bleached flour works but the culture is slower on it.</li>
+      <li><b>Reviving an old starter:</b> 10–20% whole wheat or rye in the feeds. The bran and extra nutrients wake it up faster.</li>
+      <li><b>Before storing:</b> feed with white flour. Whole grains ferment faster and turn it acidic sooner in the fridge.</li>
+    </ul>
+    <h3>Temperature</h3>
+    <p>${r.sT < 70 ? `At ${r.sT} °F feeds are slow. If you can, find a warmer spot (75–80 °F), such as the oven with the light on, to shorten revival.` : r.sT > 82 ? `At ${r.sT} °F the starter peaks fast and can turn soupy and sour. Keep an eye on it and feed promptly at peak.` : `${r.sT} °F is a good range. Each feed should peak in roughly the time shown.`} Warmer by about 15 °F roughly halves the time to peak.</p>
     <h3>Ready to use when it</h3>
     <ul>
       <li>doubles within 4–8 hours of a feed</li>
@@ -629,7 +673,7 @@ function setMode(m){
 $("mode-start").addEventListener("click", ()=>setMode("start"));
 $("mode-finish").addEventListener("click", ()=>setMode("finish"));
 
-const ids = ["when","starter","loaves","loafwt","temp","proof","retard","hyd","salt","pf","ww","flour","wgType","warm","warmT","wLev","wBulk","wProof"];
+const ids = ["when","starter","starterT","sflour","loaves","loafwt","temp","proof","retard","hyd","salt","pf","ww","flour","wgType","warm","warmT","wLev","wBulk","wProof"];
 ids.forEach(id => { $(id).addEventListener("input", render); $(id).addEventListener("change", render); });
 const isBox = id => $(id).type === "checkbox";
 

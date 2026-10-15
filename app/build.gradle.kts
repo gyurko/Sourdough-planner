@@ -10,8 +10,8 @@ android {
         applicationId = "com.sourdoughplanner.app"
         minSdk = 28
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     // Fixed key committed to the repo so every build (local or GitHub Actions) has the same

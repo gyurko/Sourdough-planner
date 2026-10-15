@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Match the page background so the area behind the system bars blends in -->
+    <color name="page_bg">#F3F4F2</color>
+    <color name="accent">#A65A1B</color>
+    <color name="icon_bg">#1D2326</color>
+    <color name="icon_loaf">#E09A5B</color>
+</resources>
